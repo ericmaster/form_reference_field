@@ -1,0 +1,7 @@
+form_reference_field.autocomplete:
+  path: '/admin/form-reference-field/autocomplete'
+  defaults:
+    _controller: '\Drupal\form_reference_field\Controller\FormReferenceAutocompleteController::handleAutocomplete'
+    _title: 'Form Reference Autocomplete'
+  requirements:
+    _permission: 'administer site configuration'

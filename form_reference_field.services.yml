@@ -1,0 +1,4 @@
+services:
+  form_reference_field.form_discovery:
+    class: 'Drupal\form_reference_field\FormReferenceFormDiscovery'
+    arguments: ['@module_handler', '@extension.list.module', '@file_system']
