@@ -63,7 +63,61 @@ class FormReferenceWidget extends WidgetBase implements ContainerFactoryPluginIn
       '#empty_option' => $this->t('- Select -'),
       '#required' => $element['#required'],
     ];
+    // Add a multiple value field for arguments with add more functionality.
+    $form_args = isset($items[$delta]->form_args) && is_array($items[$delta]->form_args) ? $items[$delta]->form_args : [''];
+    $element['form_args'] = [
+      '#type' => 'fieldset',
+      '#title' => $this->t('Form arguments (tokens allowed)'),
+      '#description' => $this->t('Enter one or more arguments to pass to the form. Use tokens if needed.'),
+      '#tree' => TRUE,
+    ];
+    $max_args = $form_state->get(['form_reference_field', 'max_args', $delta]) ?? count($form_args);
+    if ($form_state->getTriggeringElement() && $form_state->getTriggeringElement()['#name'] === 'add_form_arg_' . $delta) {
+      $max_args++;
+      $form_state->set(['form_reference_field', 'max_args', $delta], $max_args);
+    }
+    for ($i = 0; $i < $max_args; $i++) {
+      $element['form_args'][$i] = [
+        '#type' => 'textfield',
+        '#title' => $this->t('Argument @num', ['@num' => $i + 1]),
+        '#default_value' => isset($form_args[$i]) ? $form_args[$i] : '',
+        '#required' => FALSE,
+      ];
+    }
+    $element['form_args']['add_more'] = [
+      '#type' => 'submit',
+      '#value' => $this->t('Add another argument'),
+      '#name' => 'add_form_arg_' . $delta,
+      '#submit' => [[get_class($this), 'addMoreSubmit']],
+      '#ajax' => [
+        'callback' => [get_class($this), 'addMoreAjax'],
+        'wrapper' => 'form-args-wrapper-' . $delta,
+      ],
+      '#limit_validation_errors' => [],
+      '#attributes' => ['class' => ['add-more-button']],
+    ];
+    $element['form_args']['#prefix'] = '<div id="form-args-wrapper-' . $delta . '">';
+    $element['form_args']['#suffix'] = '</div>';
     return $element;
+  }
+
+  /**
+   * Ajax callback for add more arguments.
+   */
+  public static function addMoreAjax(array $form, FormStateInterface $form_state) {
+    // Find the triggering element's parents to return the correct part of the form.
+    $triggering_element = $form_state->getTriggeringElement();
+    $parents = $triggering_element['#array_parents'];
+    array_pop($parents); // Remove the button itself.
+    $element = \Drupal\Component\Utility\NestedArray::getValue($form, $parents);
+    return $element;
+  }
+
+  /**
+   * Submit handler for add more arguments.
+   */
+  public static function addMoreSubmit(array $form, FormStateInterface $form_state) {
+    // No-op, state is handled in formElement.
   }
 
   /**

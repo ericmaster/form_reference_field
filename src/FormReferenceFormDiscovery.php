@@ -68,4 +68,32 @@ class FormReferenceFormDiscovery
     $this->moduleHandler->invokeAll('form_reference_options_alter', [&$options]);
     return $options;
   }
+
+  /**
+   * Finds the entity type ID for a given entity form class.
+   *
+   * @param string $form_id
+   *   The form class name.
+   *
+   * @return string|null
+   *   The entity type ID if found, or NULL.
+   */
+  public function getEntityTypeIdFromEntityFormClass($form_id) {
+    if (!is_subclass_of($form_id, \Drupal\Core\Entity\EntityForm::class)) {
+      return NULL;
+    }
+    $entity_type_manager = \Drupal::entityTypeManager();
+    foreach ($entity_type_manager->getDefinitions() as $entity_type_id_candidate => $definition) {
+      $handlers = $definition->getHandlerClasses();
+      if (!empty($handlers['form'])) {
+        foreach ($handlers['form'] as $operation => $form_class) {
+          if ($form_class === $form_id) {
+            return $entity_type_id_candidate;
+          }
+        }
+      }
+    }
+    return NULL;
+  }
+
 }
