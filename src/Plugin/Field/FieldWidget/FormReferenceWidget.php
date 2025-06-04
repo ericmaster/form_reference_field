@@ -19,8 +19,7 @@ use Drupal\Core\Plugin\ContainerFactoryPluginInterface;
  *   }
  * )
  */
-class FormReferenceWidget extends WidgetBase implements ContainerFactoryPluginInterface
-{
+class FormReferenceWidget extends WidgetBase implements ContainerFactoryPluginInterface {
 
   /**
    * @var \Drupal\form_reference_field\FormReferenceFormDiscovery
@@ -30,8 +29,7 @@ class FormReferenceWidget extends WidgetBase implements ContainerFactoryPluginIn
   /**
    * Constructs a CustomWidget object.
    */
-  public function __construct($plugin_id, $plugin_definition, $field_definition, $settings, $third_party_settings, $formDiscovery)
-  {
+  public function __construct($plugin_id, $plugin_definition, $field_definition, $settings, $third_party_settings, $formDiscovery) {
     parent::__construct($plugin_id, $plugin_definition, $field_definition, $settings, $third_party_settings);
     $this->formDiscovery = $formDiscovery;
   }
@@ -39,8 +37,7 @@ class FormReferenceWidget extends WidgetBase implements ContainerFactoryPluginIn
   /**
    * {@inheritdoc}
    */
-  public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition)
-  {
+  public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition) {
     return new static(
       $plugin_id,
       $plugin_definition,
@@ -54,8 +51,7 @@ class FormReferenceWidget extends WidgetBase implements ContainerFactoryPluginIn
   /**
    * {@inheritdoc}
    */
-  public function formElement(FieldItemListInterface $items, $delta, array $element, array &$form, FormStateInterface $form_state)
-  {
+  public function formElement(FieldItemListInterface $items, $delta, array $element, array &$form, FormStateInterface $form_state) {
     $value = isset($items[$delta]->form_id) ? $items[$delta]->form_id : '';
     $options = $this->getAllowedFormOptions();
     $element['form_id'] = [
@@ -97,6 +93,17 @@ class FormReferenceWidget extends WidgetBase implements ContainerFactoryPluginIn
       $max_args++;
       $form_state->set(['form_reference_field', 'max_args', $delta], $max_args);
     }
+    // Get the configured entity type for entity reference arguments.
+    $entity_target_type = $this->getSetting('entity_reference_target_type') ?: 'node';
+    // Get all entity types for the per-argument select.
+    $entity_types = \Drupal::entityTypeManager()->getDefinitions();
+    $entity_type_options = [];
+    foreach ($entity_types as $id => $definition) {
+      if ($definition->get('entity_keys')['id'] ?? FALSE) {
+        $entity_type_options[$id] = $definition->getLabel() ?: $id;
+      }
+    }
+    $entity_target_type_default = $this->getSetting('entity_reference_target_type') ?: 'node';
     for ($i = 0; $i < $max_args; $i++) {
       $arg_type = isset($form_args[$i]['type']) ? $form_args[$i]['type'] : 'text';
       $element['form_args'][$i] = [
@@ -112,16 +119,25 @@ class FormReferenceWidget extends WidgetBase implements ContainerFactoryPluginIn
         ],
         '#default_value' => $arg_type,
         '#ajax' => [
-          'callback' => [get_class($this), 'argumentTypeAjax'],
+          'callback' => [get_class($this), 'ajaxCallback'],
           'wrapper' => 'form-arg-type-wrapper-' . $delta . '-' . $i,
         ],
       ];
       $element['form_args'][$i]['#prefix'] = '<div id="form-arg-type-wrapper-' . $delta . '-' . $i . '">';
       $element['form_args'][$i]['#suffix'] = '</div>';
       if ($arg_type === 'entity') {
+        // Per-argument entity type select.
+        $selected_entity_type = isset($form_args[$i]['entity_target_type']) ? $form_args[$i]['entity_target_type'] : $entity_target_type_default;
+        $element['form_args'][$i]['entity_target_type'] = [
+          '#type' => 'select',
+          '#title' => $this->t('Entity type for argument @num', ['@num' => $i + 1]),
+          '#options' => $entity_type_options,
+          '#default_value' => $selected_entity_type,
+          '#required' => TRUE,
+        ];
         $element['form_args'][$i]['entity'] = [
           '#type' => 'entity_autocomplete',
-          '#target_type' => 'node', // TODO: make configurable.
+          '#target_type' => $selected_entity_type,
           '#title' => $this->t('Entity for argument @num', ['@num' => $i + 1]),
           '#default_value' => isset($form_args[$i]['entity']) ? $form_args[$i]['entity'] : NULL,
           '#required' => FALSE,
@@ -139,9 +155,8 @@ class FormReferenceWidget extends WidgetBase implements ContainerFactoryPluginIn
       '#type' => 'submit',
       '#value' => $this->t('Add another argument'),
       '#name' => 'add_form_arg_' . $delta,
-      '#submit' => [[get_class($this), 'addMoreSubmit']],
       '#ajax' => [
-        'callback' => [get_class($this), 'addMoreAjax'],
+        'callback' => [get_class($this), 'ajaxCallback'],
         'wrapper' => 'form-args-wrapper-' . $delta,
       ],
       '#limit_validation_errors' => [],
@@ -153,41 +168,19 @@ class FormReferenceWidget extends WidgetBase implements ContainerFactoryPluginIn
   }
 
   /**
-   * Ajax callback for add more arguments.
-   */
-  public static function addMoreAjax(array $form, FormStateInterface $form_state)
-  {
-    // Find the triggering element's parents to return the correct part of the form.
-    $triggering_element = $form_state->getTriggeringElement();
-    $parents = $triggering_element['#array_parents'];
-    array_pop($parents); // Remove the button itself.
-    $element = \Drupal\Component\Utility\NestedArray::getValue($form, $parents);
-    return $element;
-  }
-
-  /**
-   * Submit handler for add more arguments.
-   */
-  public static function addMoreSubmit(array $form, FormStateInterface $form_state)
-  {
-    // No-op, state is handled in formElement.
-  }
-
-  /**
    * {@inheritdoc}
    */
-  public static function defaultSettings()
-  {
+  public static function defaultSettings() {
     return [
       'allowed_forms' => [],
+      'entity_reference_target_type' => 'node',
     ] + parent::defaultSettings();
   }
 
   /**
    * Helper to get allowed form options for this widget instance.
    */
-  protected function getAllowedFormOptions()
-  {
+  protected function getAllowedFormOptions() {
     $options = $this->formDiscovery->getFormOptions();
     $allowed_forms_setting = $this->getSetting('allowed_forms');
     if (is_string($allowed_forms_setting)) {
@@ -204,8 +197,7 @@ class FormReferenceWidget extends WidgetBase implements ContainerFactoryPluginIn
   /**
    * {@inheritdoc}
    */
-  public function settingsForm(array $form, FormStateInterface $form_state)
-  {
+  public function settingsForm(array $form, FormStateInterface $form_state) {
     $elements = parent::settingsForm($form, $form_state);
     $allowed_forms_setting = $this->getSetting('allowed_forms');
     $elements['allowed_forms'] = [
@@ -217,14 +209,29 @@ class FormReferenceWidget extends WidgetBase implements ContainerFactoryPluginIn
       '#autocomplete_route_name' => 'form_reference_field.autocomplete',
       '#autocomplete_route_parameters' => [],
     ];
+    // Add entity reference target type setting.
+    $entity_types = \Drupal::entityTypeManager()->getDefinitions();
+    $entity_type_options = [];
+    foreach ($entity_types as $id => $definition) {
+      if ($definition->get('entity_keys')['id'] ?? FALSE) {
+        $entity_type_options[$id] = $definition->getLabel() ?: $id;
+      }
+    }
+    $elements['entity_reference_target_type'] = [
+      '#type' => 'select',
+      '#title' => $this->t('Entity reference target type'),
+      '#options' => $entity_type_options,
+      '#default_value' => $this->getSetting('entity_reference_target_type') ?: 'node',
+      '#description' => $this->t('Select the entity type to use for entity reference arguments.'),
+      '#required' => TRUE,
+    ];
     return $elements;
   }
 
   /**
    * {@inheritdoc}
    */
-  public function settingsSummary()
-  {
+  public function settingsSummary() {
     $summary = parent::settingsSummary();
     $allowed_form_options = $this->getAllowedFormOptions();
     if (empty($allowed_form_options)) {
@@ -238,13 +245,12 @@ class FormReferenceWidget extends WidgetBase implements ContainerFactoryPluginIn
   }
 
   /**
-   * Ajax callback for switching argument type.
+   * AJAX callback for argument type switching and add more.
    */
-  public static function argumentTypeAjax(array $form, FormStateInterface $form_state)
-  {
+  public static function ajaxCallback(array $form, FormStateInterface $form_state) {
     $triggering_element = $form_state->getTriggeringElement();
     $parents = $triggering_element['#array_parents'];
-    array_pop($parents); // Remove the select itself.
+    array_pop($parents); // Remove the triggering element itself.
     $element = \Drupal\Component\Utility\NestedArray::getValue($form, $parents);
     return $element;
   }
