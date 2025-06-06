@@ -1,3 +1,12 @@
+> [!WARNING]
+> Archived: This module was moved into drupal.org
+> 
+> https://www.drupal.org/project/form_reference_field
+> 
+> https://git.drupalcode.org/project/form_reference_field
+
+---
+
 # Form Reference Field
 
 This module provides a custom field type for Drupal that allows entities to reference and embed module defined forms directly within content. This enables site builders to easily associate forms with nodes, users, or other entities, improving flexibility for collecting user input and managing form submissions.
